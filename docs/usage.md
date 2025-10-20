@@ -27,6 +27,19 @@ return {
 
 This plugin automatically creates a Unix-Socket/pipe for MCP connections.
 
+**Socket Path Behavior:**
+
+The plugin follows the XDG Base Directory specification for socket file placement:
+
+- **Unix/Linux**: Uses `$XDG_RUNTIME_DIR` if set and exists, otherwise falls back to `/tmp`
+- **Windows**: Uses `%TEMP%` environment variable
+
+Socket files are named: `nvim-mcp.<escaped-project-path>.<pid>.sock`
+
+For example, a project at `/home/user/myproject` with PID 12345 would create:
+- `$XDG_RUNTIME_DIR/nvim-mcp.%home%user%myproject.12345.sock` (if XDG_RUNTIME_DIR is set)
+- `/tmp/nvim-mcp.%home%user%myproject.12345.sock` (fallback)
+
 #### Option B: Manual Setup
 
 Start Neovim with TCP listening or creating Unix-Socket:
@@ -63,7 +76,8 @@ nvim-mcp --connect auto
 
 # Connect to specific target (TCP address or socket path)
 nvim-mcp --connect 127.0.0.1:6666
-nvim-mcp --connect /tmp/nvim.sock
+# Socket paths are typically in $XDG_RUNTIME_DIR or /tmp
+nvim-mcp --connect /run/user/$UID/nvim-mcp.%path%to%project.12345.sock
 
 # With custom logging
 nvim-mcp --log-file ./nvim-mcp.log --log-level debug
@@ -123,8 +137,8 @@ For direct connection to a known target:
    # TCP connection
    nvim-mcp --connect 127.0.0.1:6666
 
-   # Unix socket connection
-   nvim-mcp --connect /tmp/nvim.sock
+   # Unix socket connection (use actual socket path from plugin)
+   nvim-mcp --connect $XDG_RUNTIME_DIR/nvim-mcp.%path%to%project.12345.sock
    ```
 
 2. **Server automatically connects and reports the `connection_id`**
