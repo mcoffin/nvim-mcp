@@ -38,7 +38,8 @@ pub fn generate_random_id() -> String {
 #[cfg(unix)]
 pub fn generate_random_socket_path() -> String {
     let random_id = generate_random_id();
-    format!("/tmp/nvim-mcp-test-{random_id}.sock")
+    let runtime_dir = crate::server::core::get_runtime_dir();
+    format!("{runtime_dir}/nvim-mcp-test-{random_id}.sock")
 }
 
 /// Generate a random Windows named pipe path for testing

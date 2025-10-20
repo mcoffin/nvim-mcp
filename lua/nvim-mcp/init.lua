@@ -75,6 +75,30 @@ local function get_git_root()
     return nil
 end
 
+-- Get platform-specific runtime directory for socket files
+--
+-- On Unix-like systems, checks paths in priority order:
+-- 1. $XDG_RUNTIME_DIR (if set and directory exists)
+-- 2. /tmp (fallback for compatibility)
+--
+-- On Windows, uses %TEMP% environment variable
+--
+-- This matches the behavior of the Rust server's get_runtime_dir() function
+local function get_runtime_dir()
+    if vim.fn.has("win32") == 1 then
+        return os.getenv("TEMP") or "C:\\temp"
+    end
+
+    -- Unix-like systems: Try XDG_RUNTIME_DIR first
+    local xdg_runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+    if xdg_runtime_dir and vim.fn.isdirectory(xdg_runtime_dir) == 1 then
+        return xdg_runtime_dir
+    end
+
+    -- Final fallback to /tmp for compatibility
+    return "/tmp"
+end
+
 -- Generate pipe file path based on git root
 local function generate_pipe_path()
     local git_root = get_git_root()
@@ -85,9 +109,9 @@ local function generate_pipe_path()
 
     local escaped_path = escape_path(git_root)
     local pid = vim.fn.getpid()
-    local temp_dir = vim.fn.has("win32") == 1 and os.getenv("TEMP") or "/tmp"
+    local runtime_dir = get_runtime_dir()
 
-    return string.format("%s/nvim-mcp.%s.%d.sock", temp_dir, escaped_path, pid)
+    return string.format("%s/nvim-mcp.%s.%d.sock", runtime_dir, escaped_path, pid)
 end
 
 --- Setup nvim-mcp with custom tools and configuration

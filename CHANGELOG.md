@@ -10,6 +10,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Improved
+
+- **XDG Base Directory Compliance**: Socket files now follow the XDG Base Directory
+  specification for better integration with modern Linux systems. On Unix-like systems,
+  sockets are created in `$XDG_RUNTIME_DIR` if set and exists, otherwise falling back
+  to `/tmp` for compatibility. This change applies to both the Neovim plugin (Lua) and
+  the MCP server (Rust), ensuring consistent behavior across the entire stack. Windows
+  behavior remains unchanged using `%TEMP%`. The implementation uses the well-established
+  `dirs` crate (v6.0) for portable directory resolution.
+
 ## [v0.7.1] - 2025-10-09
 
 ### Fixed
