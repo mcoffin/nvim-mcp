@@ -1,6 +1,7 @@
-use std::{path::PathBuf, str::FromStr, sync::OnceLock};
+use std::{path::{Path, PathBuf}, str::FromStr, sync::OnceLock};
 
 use clap::Parser;
+use glob::glob;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
@@ -42,9 +43,14 @@ fn long_version() -> &'static str {
 
 #[derive(Clone, Debug)]
 enum ConnectBehavior {
+    /// Do not connect right away, instead defer to the usage of the `connect*` tool APIs
     Manual,
+    /// Automatically connect to a matching socket based off of the project name.
     Auto,
+    /// Connect to a literal path
     SpecificTarget(String),
+    /// Connect to a glob-matched path
+    Glob(String),
 }
 
 impl std::fmt::Display for ConnectBehavior {
@@ -52,7 +58,8 @@ impl std::fmt::Display for ConnectBehavior {
         match self {
             ConnectBehavior::Manual => write!(f, "manual"),
             ConnectBehavior::Auto => write!(f, "auto"),
-            ConnectBehavior::SpecificTarget(target) => write!(f, "{}", target),
+            ConnectBehavior::Glob(pat)
+            | ConnectBehavior::SpecificTarget(pat) => write!(f, "{}", pat),
         }
     }
 }
@@ -64,6 +71,8 @@ impl FromStr for ConnectBehavior {
         match s {
             "manual" => Ok(ConnectBehavior::Manual),
             "auto" => Ok(ConnectBehavior::Auto),
+            target if target.contains('*') =>
+                Ok(ConnectBehavior::Glob(target.to_string())),
             target => {
                 // Validate TCP address format
                 if target.parse::<std::net::SocketAddr>().is_ok() {
@@ -176,6 +185,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        ConnectBehavior::Glob(target) => {
+            #[derive(Debug, Clone, Copy, thiserror::Error)]
+            #[error("Failed to connect to any globbed socket: {0}")]
+            struct FailedGlobConnection<S: std::fmt::Display>(S);
+
+            let mut it = glob(&target)?;
+            let mut ret = None;
+            while let Some(p) = it.next().and_then(Result::ok) {
+                let p: &Path = p.as_ref();
+                match auto_connect_single_target(&server, &p.as_os_str().to_string_lossy()).await {
+                    Ok(id) => {
+                        info!("Connected to globbed target {} with ID {}", &target, id);
+                        ret = vec![id].into();
+                    },
+                    Err(e) => error!("Failed to connect to {}: {}", p.display(), e),
+                }
+            }
+            match ret.ok_or(FailedGlobConnection(target)) {
+                Ok(v) => v,
+                Err(e) => return Err(e.into()),
+            }
+        },
         ConnectBehavior::SpecificTarget(target) => {
             match auto_connect_single_target(&server, &target).await {
                 Ok(id) => {
