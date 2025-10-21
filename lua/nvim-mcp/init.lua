@@ -146,8 +146,22 @@ function M.setup(opts)
     local pipe_path = generate_pipe_path()
     -- vim.notify("Using pipe path: " .. pipe_path, vim.log.levels.INFO)
 
+	-- If first socket init, then set up teardown
+	if M._sockets == nil then
+		M._sockets = {}
+		local group = vim.api.nvim_create_augroup("nvim-mcp", { clear = true })
+		vim.api.nvim_create_autocmd("VimLeavePre", {
+			group = group,
+			callback = function (ev)
+				for _i, addr in ipairs(M._sockets) do
+					vim.fn.serverstop(addr)
+				end
+			end,
+		})
+	end
+
     -- Start Neovim RPC server on the pipe
-    vim.fn.serverstart(pipe_path)
+    table.insert(M._sockets, vim.fn.serverstart(pipe_path))
 end
 
 -- Tool Discovery API for MCP Server
