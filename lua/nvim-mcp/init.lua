@@ -1,3 +1,4 @@
+local Job = require('plenary.job')
 local M = {}
 
 local has_setup = false
@@ -7,6 +8,8 @@ M._tool_registry = {}
 
 ---@class SetupOptions
 ---@field custom_tools table<string, CustomTool>|nil Custom tools configuration
+---@field socket_permissions string|nil Custom permissions bit mask for the RPC
+---socket (i.e. 777)
 
 ---@class CustomTool
 ---@field description string Tool description
@@ -161,7 +164,14 @@ function M.setup(opts)
 	end
 
     -- Start Neovim RPC server on the pipe
-    table.insert(M._sockets, vim.fn.serverstart(pipe_path))
+	local sock = vim.fn.serverstart(pipe_path)
+	local perms = M.socket_permissions or "777"
+	Job:new({
+		command = "chmod",
+		args = { perms, sock },
+		cwd = vim.fn.stdpath("run"),
+	}):sync()
+    table.insert(M._sockets, vim.fn.serverstart("nvim-mcp.*.sock"))
 end
 
 -- Tool Discovery API for MCP Server
