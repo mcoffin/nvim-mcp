@@ -2508,7 +2508,7 @@ where
         match conn
             .nvim
             .execute_lua(
-                include_str!("lua/lsp_apply_workspace_edit.lua"),
+                "return require('nvim-mcp.handlers').call('lsp_apply_edit', ...)",
                 vec![
                     Value::from(client_name),
                     Value::from(serde_json::to_string(&workspace_edit).map_err(|e| {
@@ -2903,7 +2903,7 @@ where
         match conn
             .nvim
             .execute_lua(
-                include_str!("lua/navigate.lua"),
+                "return require('nvim-mcp.handlers').call('navigate', ...)",
                 vec![Value::from(
                     serde_json::to_string(&TextDocumentPositionParams {
                         text_document,
@@ -3412,7 +3412,7 @@ where
         match conn
             .nvim
             .execute_lua(
-                include_str!("lua/edit_buffer.lua"),
+                "return require('nvim-mcp.handlers').call('edit_buffer', ...)",
                 vec![
                     Value::from(text_document.uri),
                     Value::from(serde_json::to_string(&edits).map_err(|e| {

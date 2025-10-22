@@ -9,6 +9,7 @@ M._tool_registry = {}
 ---@field custom_tools table<string, CustomTool>|nil Custom tools configuration
 ---@field socket_permissions string|nil Custom permissions bit mask for the RPC
 ---socket (i.e. 777)
+---@field handlers table<string, function>|nil Override default handlers (navigate, lsp_apply_edit, edit_buffer)
 
 ---@class CustomTool
 ---@field description string Tool description
@@ -141,6 +142,14 @@ function M.setup(opts)
                     handler = tool_config.handler,
                 }
             end
+        end
+    end
+
+    -- Configure handler overrides
+    if opts.handlers then
+        local handlers = require('nvim-mcp.handlers')
+        for handler_name, handler_fn in pairs(opts.handlers) do
+            handlers.override(handler_name, handler_fn)
         end
     end
 
