@@ -171,7 +171,7 @@ function M.setup(opts)
 		args = { perms, sock },
 		cwd = vim.fn.stdpath("run"),
 	}):sync()
-    table.insert(M._sockets, vim.fn.serverstart("nvim-mcp.*.sock"))
+    table.insert(M._sockets, sock)
 end
 
 -- Tool Discovery API for MCP Server
