@@ -12,7 +12,7 @@ use tracing::instrument;
 
 use super::core::{NeovimMcpServer, find_get_all_targets};
 use super::lua_tools;
-use crate::neovim::client::TypeHierarchyItem;
+use crate::neovim::client::{Severity, TypeHierarchyItem};
 use crate::neovim::{
     CallHierarchyItem, CodeAction, DocumentIdentifier, FormattingOptions, NeovimClient, Position,
     PrepareRenameResult, Range, TextEdit, WorkspaceEdit, string_or_struct,
@@ -102,6 +102,12 @@ pub struct WaitForLspReadyRequest {
 
 fn default_timeout() -> u64 {
     5000
+}
+
+/// Workspace diagnostics parameters
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct WorkspaceDiagnosticsParams {
+    pub connection_id: String,
 }
 
 /// Workspace symbols parameters
@@ -474,6 +480,26 @@ pub struct TypeHierarchySubtypesParams {
     pub item: TypeHierarchyItem,
 }
 
+/// Represents the count of each severity of diagnostic
+#[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
+struct DiagnosticsSummary {
+    error: u32,
+    info: u32,
+    warn: u32,
+    hint: u32,
+}
+
+impl DiagnosticsSummary {
+    fn add(&mut self, severity: Severity) {
+        match severity {
+            Severity::Error => self.error += 1,
+            Severity::Warn => self.warn += 1,
+            Severity::Info => self.r#info += 1,
+            Severity::Hint => self.info += 1,
+        }
+    }
+}
+
 macro_rules! include_files {
     ($($key:ident),* $(,)?) => {{
         let mut map = HashMap::new();
@@ -491,6 +517,7 @@ impl NeovimMcpServer {
             connect,
             read,
             buffer_diagnostics,
+            workspace_diagnostics,
         }
     }
 
@@ -700,6 +727,17 @@ impl NeovimMcpServer {
         let client = self.get_connection(&connection_id)?;
         let diagnostics = client.get_buffer_diagnostics(id).await?;
         Ok(CallToolResult::success(vec![Content::json(diagnostics)?]))
+    }
+
+    #[tool]
+    #[instrument(skip(self))]
+    pub async fn workspace_diagnostics(
+        &self,
+        Parameters(WorkspaceDiagnosticsParams { connection_id }): Parameters<WorkspaceDiagnosticsParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let client = self.get_connection(&connection_id)?;
+        let ret = client.execute_lua("return require('nvim-mcp.handlers').diagnostic_summary()").await?;
+        Ok(CallToolResult::success(vec![Content::json(ret.as_str())?]))
     }
 
     #[tool(description = "Get workspace LSP clients")]

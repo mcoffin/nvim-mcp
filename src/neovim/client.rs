@@ -486,6 +486,21 @@ pub struct Diagnostic {
     pub user_data: Option<UserData>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Severity {
+    Hint = 4,
+    Info = 3,
+    Warn = 2,
+    Error = 1,
+}
+
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("invalid value for {type}: {value:?}")]
+pub struct InvalidValueError<'a, T: std::fmt::Debug> {
+    pub r#type: &'a str,
+    pub value: T,
+}
+
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct UserData {
     pub lsp: LSPDiagnostic,
@@ -581,7 +596,7 @@ where
 }
 
 /// Universal identifier for text documents supporting multiple reference types
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, schemars::JsonSchema, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentIdentifier {
     /// Reference by Neovim buffer ID (for currently open files)

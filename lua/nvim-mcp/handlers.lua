@@ -236,4 +236,50 @@ function M.list_handlers()
     return names
 end
 
+local DiagSummary = {
+	bufnr = 0,
+}
+DiagSummary.__index = DiagSummary
+
+---@classDiagSummary
+function DiagSummary:new(buf)
+	return setmetatable({
+		bufnr = buf,
+		name = vim.api.nvim_buf_get_name(buf),
+		error = 0,
+		warn = 0,
+		info = 0,
+		hint = 0,
+	}, DiagSummary)
+end
+
+---@param d:diagnostic diagnostic
+function DiagSummary:add(d)
+	if d == vim.diagnostic.severity.HINT then
+		self.hint = self.hint + 1
+	elseif d == vim.diagnostic.severity.INFO then
+		self.info = self.info + 1
+	elseif d == vim.diagnostic.severity.INFO then
+		self.info = self.info + 1
+	elseif d == vim.diagnostic.severity.INFO then
+		self.info = self.info + 1
+	end
+end
+
+function M.diagnostic_summary()
+	local diags = vim.diagnostic.get()
+	local summaries = {}
+	for d in diags do
+		if summaries[d.bufnr] == nil then
+			summaries[d.bufnr] = DiagSummary:new(d.bufnr)
+		end
+		summaries[d.bufnr]:add(d)
+	end
+	local ret = {}
+	for _i, v in ipairs(summaries) do
+		table.insert(ret, v)
+	end
+	return ret
+end
+
 return M
