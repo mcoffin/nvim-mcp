@@ -436,6 +436,7 @@ pub async fn setup_auto_connected_client_ipc_advance(
     ipc_path: &str,
     config_path: &str,
     open_file: &str,
+    wait_for_lsp: bool,
 ) -> (NeovimClient<tokio::net::UnixStream>, NeovimIpcGuard) {
     let child = setup_neovim_instance_ipc_advance(ipc_path, config_path, open_file).await;
     let mut client = NeovimClient::default();
@@ -454,16 +455,18 @@ pub async fn setup_auto_connected_client_ipc_advance(
     }
 
     // Wait for LSP to be ready and analysis to complete
-    let lsp_result = client.wait_for_lsp_ready(None, 15000).await;
-    if lsp_result.is_err() {
-        let _guard = NeovimIpcGuard::new(child, ipc_path.to_string());
-        panic!("Failed to wait for LSP: {lsp_result:?}");
-    }
+    if wait_for_lsp {
+        let lsp_result = client.wait_for_lsp_ready(None, 15000).await;
+        if lsp_result.is_err() {
+            let _guard = NeovimIpcGuard::new(child, ipc_path.to_string());
+            panic!("Failed to wait for LSP: {lsp_result:?}");
+        }
 
-    let diagnostics_result = client.wait_for_diagnostics(None, 15000).await;
-    if diagnostics_result.is_err() {
-        let _guard = NeovimIpcGuard::new(child, ipc_path.to_string());
-        panic!("Failed to wait for diagnostics: {diagnostics_result:?}");
+        let diagnostics_result = client.wait_for_diagnostics(None, 15000).await;
+        if diagnostics_result.is_err() {
+            let _guard = NeovimIpcGuard::new(child, ipc_path.to_string());
+            panic!("Failed to wait for diagnostics: {diagnostics_result:?}");
+        }
     }
 
     let guard = NeovimIpcGuard::new(child, ipc_path.to_string());

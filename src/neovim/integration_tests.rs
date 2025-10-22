@@ -181,6 +181,7 @@ async fn test_get_vim_diagnostics() {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         diagnostic_path.to_str().unwrap(),
+        true,
     )
     .await;
 
@@ -202,6 +203,7 @@ async fn test_code_action() {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         diagnostic_path.to_str().unwrap(),
+        true,
     )
     .await;
 
@@ -252,6 +254,7 @@ async fn test_lsp_resolve_code_action() {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true,
     )
     .await;
 
@@ -360,6 +363,7 @@ async fn test_lsp_apply_workspace_edit() {
         &ipc_path,
         get_testdata_path("cfg_lsp.lua").to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true,
     )
     .await;
 
@@ -481,6 +485,7 @@ func main() {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true,
     )
     .await;
 
@@ -590,6 +595,7 @@ pub fn main() !void {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true,
     )
     .await;
 
@@ -694,6 +700,7 @@ func main() {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true,
     )
     .await;
 
@@ -804,6 +811,7 @@ func main() {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true,
     )
     .await;
 
@@ -892,6 +900,7 @@ async fn test_lsp_rename_with_prepare() {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true
     )
     .await;
 
@@ -980,6 +989,7 @@ async fn test_lsp_rename_without_prepare() {
         &ipc_path,
         cfg_path.to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true
     )
     .await;
 
@@ -1097,6 +1107,7 @@ main();
         &ipc_path,
         get_testdata_path("cfg_lsp.lua").to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true
     )
     .await;
 
@@ -1180,6 +1191,7 @@ main();
         &ipc_path,
         cfg_path.to_str().unwrap(),
         temp_file_path.to_str().unwrap(),
+        true
     )
     .await;
 
@@ -1357,7 +1369,14 @@ async fn test_edit_buffer() {
     fs::write(&temp_file_path, initial_content).expect("Failed to write temp file");
 
     let ipc_path = generate_random_ipc_path();
-    let (client, _guard) = setup_auto_connected_client_ipc(&ipc_path).await;
+    let cfg_path = get_testdata_path("cfg_lsp.lua");
+    let (client, _guard) = setup_auto_connected_client_ipc_advance(
+        &ipc_path,
+        cfg_path.to_str().unwrap(),
+        temp_file_path.to_str().unwrap(),
+        false
+    )
+    .await;
 
     // Open the file in Neovim and get the buffer number
     let bufnr_result = client

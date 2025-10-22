@@ -100,6 +100,22 @@ When adding connection-aware MCP tools:
 5. Update integration tests
 6. Tool is automatically registered via `#[tool_router]` macro
 
+## Handler Customization
+
+The plugin supports runtime customization of certain tool handlers without
+recompiling Rust. See @./docs/handlers.md for details.
+
+**Available customizable handlers:**
+- `navigate` - Custom cursor positioning behavior
+- `lsp_apply_edit` - Custom LSP edit application
+- `edit_buffer` - Custom buffer editing behavior
+
+**Implementation details:**
+- Handlers defined in `lua/nvim-mcp/handlers.lua`
+- Configured via `setup({ handlers = {...} })` in Neovim
+- Called from Rust using `require('nvim-mcp.handlers').call('handler_name', ...)`
+- Test setup automatically configures package.path in `src/testdata/cfg_lsp.lua`
+
 ## Error Handling
 
 - **Layered Errors**: `ServerError` (top-level) and `NeovimError` (Neovim-specific)
