@@ -4,7 +4,7 @@ use tempfile::TempDir;
 use tracing::info;
 use tracing_test::traced_test;
 
-use crate::neovim::client::{DocumentIdentifier, Position, Range};
+use crate::neovim::client::{DocumentIdentifier, Position, Range, TextEdit};
 use crate::neovim::{NeovimClient, NeovimClientTrait};
 use crate::test_utils::*;
 
@@ -1344,3 +1344,169 @@ async fn test_lsp_range_formatting_and_apply_edits() {
         "Buffer content should have changed after applying text edits"
     );
 }
+
+#[tokio::test]
+#[traced_test]
+async fn test_edit_buffer() {
+    // Create a temporary directory and file
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let temp_file_path = temp_dir.path().join("test_edit_buffer.txt");
+
+    // Create a simple text file with some content
+    let initial_content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\n";
+    fs::write(&temp_file_path, initial_content).expect("Failed to write temp file");
+
+    let ipc_path = generate_random_ipc_path();
+    let (client, _guard) = setup_auto_connected_client_ipc(&ipc_path).await;
+
+    // Open the file in Neovim and get the buffer number
+    let bufnr_result = client
+        .execute_lua(&format!(
+            "vim.cmd('edit {}'); return vim.api.nvim_get_current_buf()",
+            temp_file_path.display()
+        ))
+        .await
+        .expect("Failed to open file in Neovim");
+    let bufnr = bufnr_result.as_u64().expect("Failed to get buffer number");
+    info!("Opened file in buffer {}", bufnr);
+
+    // Test 1: Single line replacement
+    let edits = vec![TextEdit {
+        range: Range {
+            start: Position {
+                line: 1,
+                character: 0,
+            },
+            end: Position {
+                line: 1,
+                character: 6,
+            },
+        },
+        new_text: "REPLACED".to_string(),
+        annotation_id: None,
+    }];
+
+    let result = client
+        .edit_buffer(DocumentIdentifier::from_buffer_id(bufnr), edits, false)
+        .await;
+
+    assert!(result.is_ok(), "Failed to edit buffer: {result:?}");
+    let edit_result = result.unwrap();
+    assert_eq!(edit_result.buffer_id, bufnr);
+    assert_eq!(edit_result.edits_applied, 1);
+    assert_eq!(edit_result.saved, false);
+    info!("✅ Single edit applied successfully");
+
+    // Verify the content changed
+    let content = client
+        .execute_lua(&format!(
+            r#"return table.concat(vim.api.nvim_buf_get_lines({}, 0, -1, false), "\n")"#,
+            bufnr
+        ))
+        .await;
+    assert!(content.is_ok(), "Failed to get buffer content: {content:?}");
+    let content_str = content.unwrap().as_str().unwrap().to_string();
+    assert!(
+        content_str.contains("REPLACED"),
+        "Buffer should contain REPLACED"
+    );
+    info!("✅ Buffer content verified after single edit");
+
+    // Test 2: Multiple edits with auto-save
+    let multi_edits = vec![
+        TextEdit {
+            range: Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 6,
+                },
+            },
+            new_text: "First Line".to_string(),
+            annotation_id: None,
+        },
+        TextEdit {
+            range: Range {
+                start: Position {
+                    line: 2,
+                    character: 0,
+                },
+                end: Position {
+                    line: 2,
+                    character: 6,
+                },
+            },
+            new_text: "Third Line".to_string(),
+            annotation_id: None,
+        },
+    ];
+
+    let result = client
+        .edit_buffer(
+            DocumentIdentifier::from_buffer_id(bufnr),
+            multi_edits,
+            true, // auto_save = true
+        )
+        .await;
+
+    assert!(result.is_ok(), "Failed to edit buffer with auto-save: {result:?}");
+    let edit_result = result.unwrap();
+    assert_eq!(edit_result.edits_applied, 2);
+    assert_eq!(edit_result.saved, true, "Buffer should be saved");
+    info!("✅ Multiple edits with auto-save applied successfully");
+
+    // Verify the file was actually saved
+    let saved_content = fs::read_to_string(&temp_file_path).expect("Failed to read saved file");
+    assert!(
+        saved_content.contains("First Line"),
+        "Saved file should contain 'First Line'"
+    );
+    assert!(
+        saved_content.contains("Third Line"),
+        "Saved file should contain 'Third Line'"
+    );
+    info!("✅ File saved to disk verified");
+
+    // Test 3: Insert operation (empty range)
+    let insert_edit = vec![TextEdit {
+        range: Range {
+            start: Position {
+                line: 0,
+                character: 10,
+            },
+            end: Position {
+                line: 0,
+                character: 10,
+            },
+        },
+        new_text: " [INSERTED]".to_string(),
+        annotation_id: None,
+    }];
+
+    let result = client
+        .edit_buffer(DocumentIdentifier::from_buffer_id(bufnr), insert_edit, false)
+        .await;
+
+    assert!(result.is_ok(), "Failed to insert text: {result:?}");
+    info!("✅ Insert operation successful");
+
+    // Verify insertion
+    let content = client
+        .execute_lua(&format!(
+            r#"return vim.api.nvim_buf_get_lines({}, 0, 1, false)[1]"#,
+            bufnr
+        ))
+        .await;
+    assert!(content.is_ok(), "Failed to get first line: {content:?}");
+    let first_line = content.unwrap().as_str().unwrap().to_string();
+    assert!(
+        first_line.contains("[INSERTED]"),
+        "First line should contain [INSERTED], got: {}",
+        first_line
+    );
+    info!("✅ Insertion verified");
+}
+
