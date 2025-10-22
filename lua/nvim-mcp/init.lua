@@ -1,4 +1,3 @@
-local Job = require('plenary.job')
 local M = {}
 
 local has_setup = false
@@ -166,11 +165,14 @@ function M.setup(opts)
     -- Start Neovim RPC server on the pipe
 	local sock = vim.fn.serverstart(pipe_path)
 	local perms = M.socket_permissions or "777"
-	Job:new({
-		command = "chmod",
-		args = { perms, sock },
-		cwd = vim.fn.stdpath("run"),
-	}):sync()
+	pcall(function()
+		local Job = require('plenary.job')
+		Job:new({
+			command = "chmod",
+			args = { perms, sock },
+			cwd = vim.fn.stdpath("run"),
+		}):sync()
+	end)
     table.insert(M._sockets, sock)
 end
 
