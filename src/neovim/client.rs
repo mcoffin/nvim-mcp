@@ -261,6 +261,14 @@ pub trait NeovimClientTrait: Sync {
         start: i64,
         end: i64,
     ) -> Result<String, NeovimError>;
+
+    /// Apply text edits directly to a buffer (non-LSP operation)
+    async fn edit_buffer(
+        &self,
+        document: DocumentIdentifier,
+        edits: Vec<TextEdit>,
+        auto_save: bool,
+    ) -> Result<EditBufferResult, NeovimError>;
 }
 
 /// Notification tracking structure
@@ -769,12 +777,12 @@ pub struct Disabled {
 pub struct TextEdit {
     /// The range of the text document to be manipulated. To insert
     /// text into a document create a range where start === end.
-    range: Range,
+    pub range: Range,
     /// The string to be inserted. For delete operations use an
     /// empty string.
-    new_text: String,
+    pub new_text: String,
     /// The actual annotation identifier.
-    annotation_id: Option<String>,
+    pub annotation_id: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
@@ -1030,6 +1038,19 @@ pub struct NavigateResult {
     pub success: bool,
     pub buffer_name: String,
     pub line: String,
+}
+
+/// Result of buffer edit operation
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+pub struct EditBufferResult {
+    /// Buffer ID that was edited
+    pub buffer_id: u64,
+    /// File path (if available)
+    pub file_path: Option<String>,
+    /// Whether the buffer was saved
+    pub saved: bool,
+    /// Number of edits applied
+    pub edits_applied: usize,
 }
 
 /// A symbol kind.
@@ -3373,6 +3394,51 @@ where
                 Err(NeovimError::Api(format!(
                     "Failed to get read document: {e}"
                 )))
+            }
+        }
+    }
+
+    async fn edit_buffer(
+        &self,
+        document: DocumentIdentifier,
+        edits: Vec<TextEdit>,
+        auto_save: bool,
+    ) -> Result<EditBufferResult, NeovimError> {
+        let text_document = self.resolve_text_document_identifier(&document).await?;
+        let conn = self.connection.as_ref().ok_or_else(|| {
+            NeovimError::Connection("Not connected to any Neovim instance".to_string())
+        })?;
+
+        match conn
+            .nvim
+            .execute_lua(
+                include_str!("lua/edit_buffer.lua"),
+                vec![
+                    Value::from(text_document.uri),
+                    Value::from(serde_json::to_string(&edits).map_err(|e| {
+                        NeovimError::Api(format!("Failed to serialize text edits: {e}"))
+                    })?),
+                    Value::from(auto_save),
+                ],
+            )
+            .await
+        {
+            Ok(result) => {
+                match serde_json::from_str::<NvimExecuteLuaResult<EditBufferResult>>(
+                    result.as_str().unwrap(),
+                ) {
+                    Ok(rv) => rv.into(),
+                    Err(e) => {
+                        debug!("Failed to parse edit buffer result: {}", e);
+                        Err(NeovimError::Api(format!(
+                            "Failed to parse edit buffer result: {e}"
+                        )))
+                    }
+                }
+            }
+            Err(e) => {
+                debug!("Failed to edit buffer: {}", e);
+                Err(NeovimError::Api(format!("Failed to edit buffer: {e}")))
             }
         }
     }

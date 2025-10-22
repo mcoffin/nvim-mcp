@@ -15,7 +15,7 @@ use super::lua_tools;
 use crate::neovim::client::TypeHierarchyItem;
 use crate::neovim::{
     CallHierarchyItem, CodeAction, DocumentIdentifier, FormattingOptions, NeovimClient, Position,
-    PrepareRenameResult, Range, WorkspaceEdit, string_or_struct,
+    PrepareRenameResult, Range, TextEdit, WorkspaceEdit, string_or_struct,
 };
 
 /// Connect to Neovim instance via unix socket or TCP
@@ -61,6 +61,21 @@ pub struct BufferReadRequest {
 
 fn default_end_line() -> i64 {
     -1
+}
+
+/// Buffer edit parameters
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct BufferEditParams {
+    /// Unique identifier for the target Neovim instance
+    pub connection_id: String,
+    /// Universal document identifier
+    #[serde(deserialize_with = "string_or_struct")]
+    pub document: DocumentIdentifier,
+    /// Text edits to apply (LSP TextEdit format)
+    pub edits: Vec<TextEdit>,
+    /// Whether to automatically save the buffer after editing (default: false)
+    #[serde(default)]
+    pub auto_save: bool,
 }
 
 /// Lua execution request
@@ -658,6 +673,22 @@ impl NeovimMcpServer {
         let client = self.get_connection(&connection_id)?;
         let text_content = client.read_document(document, start, end).await?;
         Ok(CallToolResult::success(vec![Content::text(text_content)]))
+    }
+
+    #[tool(description = "Edit buffer content directly in Neovim using LSP TextEdit format")]
+    #[instrument(skip(self))]
+    pub async fn edit_buffer(
+        &self,
+        Parameters(BufferEditParams {
+            connection_id,
+            document,
+            edits,
+            auto_save,
+        }): Parameters<BufferEditParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let client = self.get_connection(&connection_id)?;
+        let result = client.edit_buffer(document, edits, auto_save).await?;
+        Ok(CallToolResult::success(vec![Content::json(result)?]))
     }
 
     #[tool]
