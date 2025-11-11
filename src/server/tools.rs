@@ -107,6 +107,7 @@ fn default_timeout() -> u64 {
 /// Workspace diagnostics parameters
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct WorkspaceDiagnosticsParams {
+    /// Unique identifier for the target Neovim instance
     pub connection_id: String,
 }
 

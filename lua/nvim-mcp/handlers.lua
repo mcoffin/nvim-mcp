@@ -255,21 +255,25 @@ end
 
 ---@param d:diagnostic diagnostic
 function DiagSummary:add(d)
-	if d == vim.diagnostic.severity.HINT then
+	if d.severity == vim.diagnostic.severity.HINT then
 		self.hint = self.hint + 1
-	elseif d == vim.diagnostic.severity.INFO then
+	elseif d.severity == vim.diagnostic.severity.INFO then
 		self.info = self.info + 1
-	elseif d == vim.diagnostic.severity.INFO then
+	elseif d.severity == vim.diagnostic.severity.INFO then
 		self.info = self.info + 1
-	elseif d == vim.diagnostic.severity.INFO then
+	elseif d.severity == vim.diagnostic.severity.INFO then
 		self.info = self.info + 1
 	end
+end
+
+function DiagSummary:is_empty()
+	return (self.hint == 0 and self.info == 0 and self.warn == 0 and self.error == 0)
 end
 
 function M.diagnostic_summary()
 	local diags = vim.diagnostic.get()
 	local summaries = {}
-	for d in diags do
+		for _, d in ipairs(diags) do
 		if summaries[d.bufnr] == nil then
 			summaries[d.bufnr] = DiagSummary:new(d.bufnr)
 		end
@@ -277,7 +281,9 @@ function M.diagnostic_summary()
 	end
 	local ret = {}
 	for _i, v in ipairs(summaries) do
-		table.insert(ret, v)
+		if not v:is_empty() then
+			table.insert(ret, v)
+		end
 	end
 	return ret
 end

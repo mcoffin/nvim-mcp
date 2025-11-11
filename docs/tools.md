@@ -53,6 +53,9 @@ establishment phase:
 
 - **`buffer_diagnostics`**: Get diagnostics for a specific buffer
   - Parameters: `connection_id` (string), `id` (number) - Buffer ID
+  
+- **`workspace_diagnostics`**: Get diagnostics summary for whole workspace
+  - Parameters: `connection_id` (string), `id` (number) - Buffer ID
 
 ### LSP Integration
 
