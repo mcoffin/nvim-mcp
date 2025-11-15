@@ -17,7 +17,7 @@ use rmcp::{
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-use nvim_mcp::{NeovimMcpServer, auto_connect_current_project_targets, auto_connect_single_target};
+use nvim_mcp::{FilterMode, NeovimMcpServer, ToolFilterConfig, auto_connect_current_project_targets, auto_connect_single_target};
 
 static LONG_VERSION: OnceLock<String> = OnceLock::new();
 
@@ -118,6 +118,14 @@ struct Cli {
     /// Connection mode: 'manual', 'auto', or specific target (TCP address/socket path)
     #[arg(long, default_value = "manual")]
     connect: ConnectBehavior,
+
+    /// Tools to whitelist (comma-separated). If set, only these tools are exposed
+    #[arg(long, value_delimiter = ',')]
+    whitelist_tools: Vec<String>,
+
+    /// Tools to blacklist (comma-separated). These tools will be hidden
+    #[arg(long, value_delimiter = ',')]
+    blacklist_tools: Vec<String>,
 }
 
 #[tokio::main]
@@ -161,7 +169,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting nvim-mcp Neovim server");
     let connect_mode = cli.connect.to_string();
-    let server = NeovimMcpServer::with_connect_mode(Some(connect_mode.clone()));
+
+    // Parse tool filter configuration
+    let tool_filter = if !cli.whitelist_tools.is_empty() {
+        if !cli.blacklist_tools.is_empty() {
+            return Err("Cannot specify both --whitelist-tools and --blacklist-tools".into());
+        }
+        Some(ToolFilterConfig::new(FilterMode::Whitelist, cli.whitelist_tools))
+    } else if !cli.blacklist_tools.is_empty() {
+        Some(ToolFilterConfig::new(FilterMode::Blacklist, cli.blacklist_tools))
+    } else {
+        None
+    };
+
+    let server = NeovimMcpServer::with_connect_mode(Some(connect_mode.clone()), tool_filter.clone());
 
     // Handle connection mode
     let connection_ids = match cli.connect {
@@ -237,9 +258,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Starting HTTP server on {}", addr);
         let service = TowerToHyperService::new(StreamableHttpService::new(
             move || {
-                Ok(NeovimMcpServer::with_connect_mode(Some(
-                    connect_mode.clone(),
-                )))
+                Ok(NeovimMcpServer::with_connect_mode(
+                    Some(connect_mode.clone()),
+                    tool_filter.clone(),
+                ))
             },
             LocalSessionManager::default().into(),
             StreamableHttpServerConfig {

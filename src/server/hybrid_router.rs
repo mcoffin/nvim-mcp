@@ -12,6 +12,7 @@ use tracing::{debug, instrument};
 
 use crate::neovim::NeovimClientTrait;
 
+use super::config::ToolFilterConfig;
 use super::core::NeovimMcpServer;
 
 /// Implementation of From<&dyn DynamicTool> for rmcp::model::Tool
@@ -123,6 +124,9 @@ pub struct HybridToolRouter {
 
     /// Connection-specific tool mapping: connection_id -> tool_names
     connection_tools: Arc<DashMap<String, HashSet<String>>>,
+
+    /// Tool filtering configuration
+    tool_filter: ToolFilterConfig,
 }
 
 impl HybridToolRouter {
@@ -130,12 +134,14 @@ impl HybridToolRouter {
     pub fn new(
         static_router: ToolRouter<NeovimMcpServer>,
         static_tool_descriptions: HashMap<&'static str, &'static str>,
+        tool_filter: ToolFilterConfig,
     ) -> Self {
         Self {
             static_router,
             static_tool_descriptions,
             dynamic_tools: Arc::new(DashMap::new()),
             connection_tools: Arc::new(DashMap::new()),
+            tool_filter,
         }
     }
 
@@ -220,18 +226,30 @@ impl HybridToolRouter {
 
         // 1. Get static tools from macro-generated router
         // Overwrite description for static tools if it has more comprehensive description
-        tools.extend(self.static_router.list_all().into_iter().map(|mut tool| {
-            let name = tool.name.as_ref(); // ref Cow into &str
-            if let Some(desc) = self.static_tool_descriptions.get(name) {
-                tool.description = Some(desc.to_owned().trim().into());
-            }
-            tool
-        }));
+        tools.extend(
+            self.static_router
+                .list_all()
+                .into_iter()
+                .filter(|tool| self.tool_filter.should_include_tool(tool.name.as_ref()))
+                .map(|mut tool| {
+                    let name = tool.name.as_ref(); // ref Cow into &str
+                    if let Some(desc) = self.static_tool_descriptions.get(name) {
+                        tool.description = Some(desc.to_owned().trim().into());
+                    }
+                    tool
+                }),
+        );
 
         // 2. Add dynamic tools with proper metadata
         // For each tool name, we want to show one entry (representing all connections that have this tool)
         for tool_name_entry in self.dynamic_tools.iter() {
-            let _tool_name = tool_name_entry.key();
+            let tool_name = tool_name_entry.key();
+
+            // Apply filter to dynamic tools too
+            if !self.tool_filter.should_include_tool(tool_name) {
+                continue;
+            }
+
             let connections_map = tool_name_entry.value();
 
             // Pick any tool from the connections to get metadata (they should all be the same)
@@ -256,7 +274,7 @@ impl HybridToolRouter {
         tools.sort_by(|a, b| a.name.cmp(&b.name));
 
         debug!(
-            "Listed {} total tools ({} static + {} unique dynamic)",
+            "Listed {} total tools ({} static + {} unique dynamic) after filtering",
             tools.len(),
             self.static_router.list_all().len(),
             self.dynamic_tools.len()
@@ -304,6 +322,14 @@ impl HybridToolRouter {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
         debug!("HybridToolRouter dispatching tool: {}", tool_name);
+
+        // Check if tool is filtered out
+        if !self.tool_filter.should_include_tool(tool_name) {
+            return Err(McpError::invalid_request(
+                format!("Tool '{}' is not available (filtered)", tool_name),
+                None,
+            ));
+        }
 
         // 1. Try dynamic tools first (higher priority)
         if let Some(tools_for_name) = self.dynamic_tools.get(tool_name) {

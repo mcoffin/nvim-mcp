@@ -8,6 +8,7 @@ use tracing::{debug, info, warn};
 use crate::{
     neovim::{NeovimClientTrait, NeovimError},
     server::{
+        config::ToolFilterConfig,
         hybrid_router::{DynamicToolBox, HybridToolRouter},
         lua_tools,
     },
@@ -33,16 +34,20 @@ pub struct NeovimMcpServer {
 
 impl NeovimMcpServer {
     pub fn new() -> Self {
-        Self::with_connect_mode(None)
+        Self::with_connect_mode(None, None)
     }
 
-    pub fn with_connect_mode(connect_mode: Option<String>) -> Self {
+    pub fn with_connect_mode(
+        connect_mode: Option<String>,
+        tool_filter: Option<ToolFilterConfig>,
+    ) -> Self {
         debug!("Creating new NeovimMcpServer instance");
         let static_router = crate::server::tools::build_tool_router();
         let static_tool_descriptions = Self::tool_descriptions();
+        let tool_filter = tool_filter.unwrap_or_default();
         Self {
             nvim_clients: Arc::new(DashMap::new()),
-            hybrid_router: HybridToolRouter::new(static_router, static_tool_descriptions),
+            hybrid_router: HybridToolRouter::new(static_router, static_tool_descriptions, tool_filter),
             connect_mode,
         }
     }

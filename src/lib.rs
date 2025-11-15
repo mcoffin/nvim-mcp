@@ -5,7 +5,7 @@ mod server;
 pub mod test_utils;
 
 pub use server::{
-    NeovimMcpServer,
+    FilterMode, NeovimMcpServer, ToolFilterConfig,
     core::{auto_connect_current_project_targets, auto_connect_single_target},
 };
 
